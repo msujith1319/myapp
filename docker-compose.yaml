@@ -1,0 +1,56 @@
+version: "3.9"
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: sujith1319/myapp-frontend:latest
+    container_name: fcont
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_PATH=${VITE_API_PATH}
+    restart: unless-stopped
+    depends_on:
+      - backend
+      
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: sujith1319/myapp-backend:latest
+    container_name: bcont
+    ports:
+      - "5001:5001"
+    environment:
+       MONGODB_URI: ${MONGODB_URI}
+       REDIS_URL: ${REDIS_URL}
+       PORT: ${PORT}
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: mongo:7
+    container_name: dbcont
+    environment:   
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    volumes:
+      - db-data:/data/db
+    ports:
+      - "27017:27017"
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    container_name: rediscont
+    ports: 
+      - "6379:6379"
+    restart: unless-stopped     
+
+    
+volumes:
+  db-data: {}

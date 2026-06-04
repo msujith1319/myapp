@@ -1,0 +1,9 @@
+FROM node:latest
+RUN useradd -m -d /home/fuser -s /bin/bash fuser
+WORKDIR /home/fuser
+COPY --chown=fuser:fuser package*.json ./
+USER fuser
+RUN npm install
+COPY --chown=fuser:fuser . .
+EXPOSE 5173
+CMD ["npm", "run", "dev","--", "--host", "0.0.0.0"]

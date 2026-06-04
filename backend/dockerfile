@@ -1,0 +1,9 @@
+FROM node:latest
+RUN useradd -m -d /home/buser -s /bin/bash buser
+WORKDIR /home/buser
+COPY --chown=buser:buser package*.json ./
+USER buser
+RUN npm install
+COPY --chown=buser:buser . .
+EXPOSE 5001
+CMD ["npm", "start"]
