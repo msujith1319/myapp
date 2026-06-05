@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: frontend
+  namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: frontend=docker.io/sujith1319/myapp-frontend
+    argocd-image-updater.argoproj.io/frontend.update-strategy: newest-build
+    argocd-image-updater.argoproj.io/write-back-method: git:secret:argocd/github-creds
+    argocd-image-updater.argoproj.io/write-back-target: "helmvalues:values.yaml"
+    argocd-image-updater.argoproj.io/frontend.helm.image-name: image.repository
+    argocd-image-updater.argoproj.io/frontend.helm.image-tag: image.tag
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/msujith1319/myapp.git
+    targetRevision: main
+    path: deployment/frontend
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
