@@ -2,7 +2,7 @@ replicaCount: 1
 image:
   repository: sujith1319/myapp-frontend
   pullPolicy: IfNotPresent
-  tag: "31"
+  tag: "32"
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
