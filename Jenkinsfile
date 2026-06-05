@@ -128,7 +128,7 @@ pipeline {
                     docker buildx create --use || true
 
                     docker buildx build \
-                    --platform linux/amd64 \
+                    --platform linux/arm64 \
                     -t $F_DOCKER_IMAGE_LOCAL \
                     --load .
                     '''
@@ -149,7 +149,7 @@ pipeline {
                         docker buildx create --use || true
 
                         docker buildx build \
-                        --platform linux/amd64 \
+                        --platform linux/arm64 \
                         -t $B_DOCKER_IMAGE_LOCAL \
                         --load .
                         '''
