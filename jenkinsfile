@@ -1,0 +1,236 @@
+pipeline {
+    agent any
+    
+    tools{
+        nodejs 'NodeJs'
+        jdk 'jdk'
+    }
+
+    environment {
+        APP_NAME = "major-app"
+        PATH = "/opt/homebrew/bin:/usr/local/bin:${env.PATH}"
+        SCANNER_HOME = tool 'SonarQube'
+        F_IMG_NAME = "sujith1319/myapp-frontend"
+        B_IMG_NAME = "sujith1319/myapp-backend"
+        IMG_TAG = "${BUILD_NUMBER}"
+        F_DOCKER_IMAGE_LOCAL = "${F_IMG_NAME}:${IMG_TAG}"
+        B_DOCKER_IMAGE_LOCAL = "${B_IMG_NAME}:${IMG_TAG}"
+    }
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/msujith1319/myapp'
+            }
+        }
+        
+        stage('Tool Check') {
+            steps {
+                sh '''
+                node -v
+                npm -v
+                java -version
+                docker --version
+                '''
+            }
+        }
+
+        stage('Build') {
+            steps {
+                dir('frontend'){
+                 sh '''
+                npm install
+                '''   
+                }
+                dir('backend'){
+                 sh '''
+                npm install
+                '''   
+                }
+            }
+        }
+        
+        stage('Secret Scan - Gitleaks') {
+            steps {
+                sh '''
+                docker run --rm \
+                -v "$WORKSPACE:/repo" \
+                zricethezav/gitleaks:latest \
+                detect --source=/repo --verbose --redact --exit-code 0
+                '''
+            }
+        }
+
+        stage('OWASP Dependency Check') {
+            steps {
+                withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                    sh '''
+                    mkdir -p dependency-check-report
+
+                    docker run --rm \
+                    -v "$WORKSPACE:/src" \
+                    -v "$WORKSPACE/dependency-check-report:/report" \
+                    owasp/dependency-check:latest \
+                    --scan /src \
+                    --format HTML \
+                    --format JSON \
+                    --out /report \
+                    --project "$APP_NAME" \
+                    --disableYarnAudit \
+                    --disableNodeAudit \
+                    --nvdApiKey "$NVD_API_KEY"
+                    '''
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'dependency-check-report/**', fingerprint: true
+                }
+            }
+        }
+
+        stage('SonarQube Scan') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    sh '''
+                    $SCANNER_HOME/bin/sonar-scanner \
+                    -Dsonar.projectKey=$APP_NAME \
+                    -Dsonar.projectName=$APP_NAME \
+                    -Dsonar.sources=. 
+                    '''
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 10, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Build frontend Docker Image') {
+            steps {withCredentials([usernamePassword(
+            credentialsId: 'docker-creds',
+            usernameVariable: 'DOCKER_USER',
+            passwordVariable: 'DOCKER_PASS'
+            )]) {
+                dir('frontend') {
+                    sh '''
+                    docker buildx create --use || true
+
+                    docker buildx build \
+                    --platform linux/amd64 \
+                    -t $F_DOCKER_IMAGE_LOCAL \
+                    --load .
+                    '''
+                }
+                }
+            }
+        }
+
+        stage('Build backend Docker Image') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'docker-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    dir('backend') {
+                        sh '''
+                        docker buildx create --use || true
+
+                        docker buildx build \
+                        --platform linux/amd64 \
+                        -t $B_DOCKER_IMAGE_LOCAL \
+                        --load .
+                        '''
+                    }
+                }
+            }
+        }
+        stage('Scan Docker Image with Trivy') {
+            steps {
+                sh '''
+                docker run --rm \
+                  -v /var/run/docker.sock:/var/run/docker.sock \
+                  -v ~/.cache/trivy:/root/.cache/ \
+                  -v $(pwd):/app \
+                  aquasec/trivy:latest image \
+                  --skip-java-db-update \
+                  --timeout 15m \
+                  --scanners vuln \
+                  --severity HIGH,CRITICAL \
+                  --exit-code 0 \
+                  --format table \
+                  --output /app/trivy-report-f.json \
+                  $F_DOCKER_IMAGE_LOCAL 
+                  
+                  
+                  docker run --rm \
+                  -v /var/run/docker.sock:/var/run/docker.sock \
+                  -v ~/.cache/trivy:/root/.cache/ \
+                  -v $(pwd):/app \
+                  aquasec/trivy:latest image \
+                  --skip-java-db-update \
+                  --timeout 15m \
+                  --scanners vuln \
+                  --severity HIGH,CRITICAL \
+                  --exit-code 0 \
+                  --format table \
+                  --output /app/trivy-report-b.json \
+                  $B_DOCKER_IMAGE_LOCAL
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'trivy-report-*.json', fingerprint: true
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'docker-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                    echo $DOCKER_PASS | docker login -u "$DOCKER_USER" --password-stdin
+                    
+					docker push $F_DOCKER_IMAGE_LOCAL
+					docker push $B_DOCKER_IMAGE_LOCAL
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'CI Pipeline completed successfully. ArgoCD Image Updater will handle CD.'
+        }
+
+        failure {
+            echo 'Pipeline failed. Check Jenkins logs, SonarQube dashboard, or Trivy report.'
+        }
+
+        always {
+            sh '''
+            docker logout || true
+            docker rmi $F_DOCKER_IMAGE_LOCAL || true
+            docker rmi $B_DOCKER_IMAGE_LOCAL || true
+            docker image prune -f || true
+            '''
+        }
+    }
+}
