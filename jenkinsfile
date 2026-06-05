@@ -217,7 +217,7 @@ pipeline {
 
     post {
         success {
-            echo 'CI Pipeline completed successfully. ArgoCD Image Updater will handle CD.'
+            echo 'CI Pipeline completed successfully. From now ArgoCD Image Updater will handle CD.'
         }
 
         failure {
