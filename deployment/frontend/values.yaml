@@ -21,6 +21,8 @@ service:
   nodePort: 30080
   targetPort: 5173
   protocol: TCP
+env:
+  VITE_API_PATH: "http://localhost:5001"
 ingress:
   enabled: false
   className: ""
