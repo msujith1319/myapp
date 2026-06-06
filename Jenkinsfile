@@ -125,7 +125,9 @@ pipeline {
             )]) {
                 dir('frontend') {
                     sh '''
-                    docker buildx create --use || true
+                    docker buildx inspect jenkins-builder >/dev/null 2>&1 || docker buildx create --name jenkins-builder --driver docker-container --use
+                    docker buildx use jenkins-builder
+                    docker buildx inspect --bootstrap
 
                     docker buildx build \
                     --platform linux/arm64 \
@@ -146,7 +148,9 @@ pipeline {
                 )]) {
                     dir('backend') {
                         sh '''
-                        docker buildx create --use || true
+                        docker buildx inspect jenkins-builder >/dev/null 2>&1 || docker buildx create --name jenkins-builder --driver docker-container --use
+                        docker buildx use jenkins-builder
+                        docker buildx inspect --bootstrap
 
                         docker buildx build \
                         --platform linux/arm64 \
