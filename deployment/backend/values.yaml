@@ -21,7 +21,10 @@ service:
   targetPort: 5001
   protocol: TCP
 env:
-  MONGO_URI: "mongodb://database:27017/myapp"
+  REDIS_URL: "redis://redis:6379"
+
+secrets:
+  backendSecretName: backend-secret
 ingress:
   enabled: false
   className: ""

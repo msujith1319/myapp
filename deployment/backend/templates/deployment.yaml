@@ -44,9 +44,15 @@ spec:
             - name: http
               containerPort: {{ .Values.service.port }}
               protocol: TCP
-              env:
-            - name: MONGO_URI
-              value: {{ .Values.env.MONGO_URI | quote }}
+          env:
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.backendSecretName | quote }}
+                  key: MONGODB_URI
+
+            - name: REDIS_URL
+              value: {{ .Values.env.REDIS_URL | quote }}
           {{- with .Values.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
