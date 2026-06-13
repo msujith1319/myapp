@@ -1,10 +1,11 @@
-FROM node:latest AS build
-RUN useradd -m -d /home/fuser -s /bin/bash fuser
-WORKDIR /home/fuser
-COPY --chown=fuser:fuser package*.json ./
-USER fuser
-RUN npm install
-COPY --chown=fuser:fuser . .
+FROM node:20 AS build
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install --legacy-peer-deps
+
+COPY . .
 RUN npm run build
 
 FROM nginx:alpine
